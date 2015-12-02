@@ -117,6 +117,11 @@ class MainWindow(tk.Tk):
         self.ipEntry = ttk.Entry(self.connection_frame)
         self.ipEntry.pack(side="left")
 
+        # Create setPeer button and add it to Connection frame
+        self.setPeer_button = ttk.Button(self.connection_frame, text="Set peer",
+                                         command=self.on_setPeer)
+        self.setPeer_button.pack(side="left", padx=5)
+
         # Create Connect button and add it to Connection frame
         self.connect_button = ttk.Button(self.connection_frame, text="Connect",
                                          command=self.on_connect)
@@ -202,6 +207,10 @@ class MainWindow(tk.Tk):
             command = 'taskkill /pid ' + str(id)
             system(command)
 
+    # Set peer function
+    def on_setPeer(self):
+        print("set peer pressed")
+
     # Connect button function
     def on_connect(self):
         print("connect button pressed")
@@ -214,6 +223,16 @@ class MainWindow(tk.Tk):
     def on_enter_press(self, event):
         print("enter key pressed")
 
+    def throw_error_win(self, errorMessage):
+        # Pop up window for errors
+        self.error_window = tk.Toplevel()
+        self.error_window.minsize(300, 200)
+        self.error_window.grab_set()
+        self.error_window.title('Error message')
+        self.error_message = tk.Message(self.error_window, text = errorMessage, justify = tk.LEFT, padx = 10, pady = 20)
+        self.error_message.pack(expand=True)
+        self.error_button = tk.Button(self.error_window, text='OK', command=self.error_window.destroy)
+        self.error_button.pack()
 
 # app = MainWindow()
 # app.mainloop()

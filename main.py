@@ -6,6 +6,7 @@ LOCAL_PORT = 50001
 REMOTE_PORT = 50001
 MAX_BYTES = 65535
 ACK_WAIT_TIME = 1.0
+DEBUG = False
 
 
 class AppWin(MainWindow):
@@ -17,7 +18,7 @@ class AppWin(MainWindow):
         self.statusThread = threading.Thread(target=self.statusRefresh)
         self.statusThread.start()
 
-        self.remoteIP = '192.168.1.31'  # Getting remote IP
+        self.currentIP = ''
         self.dataSequence = 0  # Sequence number for sending data packets
         self.dataSeqForAckList = []
         self.dataSeqList = []
@@ -26,23 +27,10 @@ class AppWin(MainWindow):
         self.requestingConnection = False
         self.acceptingConnection = False
         self.peerIsAlive = False
-        # self.debugThread = threading.Thread(target=self.debug)
-        # self.debugThread.start()
 
     def clearSession(self):
         self.dataSeqForAckList = []
         self.dataSeqList = []
-
-
-    # def debug(self):
-    #     while(True):
-    #         global status
-    #         print('Status: ' + str(status))
-    #         print('Requesting Connection: ' + str(self.requestingConnection))
-    #         print('Accepting Connection: ' + str(self.acceptingConnection))
-    #         print('PeerIsAlive: ' + str(self.peerIsAlive))
-    #         time.sleep(0.1)
-    #         os.system('clear')
 
     def packetDebug(self, packet):
         print('------------------------')
@@ -67,6 +55,10 @@ class AppWin(MainWindow):
         time = datetime.datetime.fromtimestamp(timeStamp)
         print(time.strftime('%H:%M:%S.%f')[:-2])
         print();print()
+
+    def on_setPeer(self):
+        self.throw_error_win('this is message')
+        # pass
 
     # Connect button function
     def on_connect(self):
@@ -188,9 +180,10 @@ class AppWin(MainWindow):
 
         packet.setTimeStamp(app.toNTPTime(time.time()))
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(packet.getTotalPacket(), (app.remoteIP, REMOTE_PORT))
+        sock.sendto(packet.getTotalPacket(), (self.currentIP, REMOTE_PORT))
         sock.close()
-        self.packetDebug(packet)
+        if DEBUG:
+            self.packetDebug(packet)
 
     def statusRefresh(self):
         self.offlineConf = {'text': 'Offline', 'foreground': 'red'}
@@ -211,8 +204,9 @@ class AppWin(MainWindow):
         pingPacket.setTimeStamp(app.toNTPTime(time.time()))
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.sendto(pingPacket.getTotalPacket(),
-                    (app.remoteIP, REMOTE_PORT))
-        self.packetDebug(pingPacket)
+                    (self.currentIP, REMOTE_PORT))
+        if DEBUG:
+            self.packetDebug(pingPacket)
         sock.close()
         time.sleep(1)
         if self.peerIsAlive:
@@ -228,7 +222,8 @@ class AppWin(MainWindow):
         while True:
             data, address = self.serverSock.recvfrom(MAX_BYTES)
             packet = PacketIn(data)
-            self.packetDebug(packet)
+            if DEBUG:
+                self.packetDebug(packet)
             if packet.getProtoCode() != 'odyaris1':
                 continue
 
@@ -251,7 +246,7 @@ class AppWin(MainWindow):
                     if (self.requestingConnection == False) and \
                             (self.acceptingConnection == False):
                         self.acceptingConnection = True
-                        self.insert_text('Server: Peer ' + str(self.remoteIP) +
+                        self.insert_text('Server: Peer ' + str(self.currentIP) +
                                          ' wants to connect.')
                     elif (self.requestingConnection == True) and \
                             (self.acceptingConnection == False):
@@ -304,7 +299,7 @@ class AppWin(MainWindow):
                         status = 1
                         self.statusRefresh()
 
-                    elif (packet.getState() == 'connect') and (address[0] == self.remoteIP):
+                    elif (packet.getState() == 'connect') and (address[0] == self.currentIP):
                         self.sendPacket('acceptConnect')
                         self.clearSession()
 
@@ -319,7 +314,7 @@ class AppWin(MainWindow):
                         self.dataSeqList.append(seq)
                         self.sendPacket('acknowledge', packetForAck=packet)
                         message = packet.getMessage()
-                        self.insert_text(str(self.remoteIP) + ': ' + message)
+                        self.insert_text(str(self.currentIP) + ': ' + message)
 
 
 class client(threading.Thread):
@@ -340,8 +335,9 @@ class client(threading.Thread):
         global status
         while True:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.sendto(self.packet.getTotalPacket(), (app.remoteIP, REMOTE_PORT))
-            app.packetDebug(self.packet)
+            sock.sendto(self.packet.getTotalPacket(), (app.currentIP, REMOTE_PORT))
+            if DEBUG:
+                app.packetDebug(self.packet)
             time.sleep(self.timeToSleep)
             self.timeToSleep *= 2
             if self.ourDataSequence not in app.dataSeqForAckList:
