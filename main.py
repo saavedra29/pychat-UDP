@@ -1,5 +1,5 @@
 from gui import MainWindow
-import socket, threading, time, ntplib, datetime
+import socket, threading, time, ntplib, datetime, errno
 from pack import PacketOut, PacketIn
 
 LOCAL_PORT = 50001
@@ -56,9 +56,18 @@ class AppWin(MainWindow):
         print(time.strftime('%H:%M:%S.%f')[:-2])
         print();print()
 
+    def setDebug(self, message):
+        timeText = time.strftime('%H:%M:%S ==> ')
+        totalMessage = timeText + message
+        self.debug_label.configure(text=totalMessage)
+
     def on_setPeer(self):
-        self.throw_error_win('this is message')
-        # pass
+        if status == 0:
+            self.currentIP = self.ipEntry.get()
+            self.insert_text('Server ==> IP of hostname set!')
+        else:
+            self.insert_text('Server ==> You have to stop the server in order to change'
+                             ' IP/hostname.')
 
     # Connect button function
     def on_connect(self):
@@ -70,7 +79,7 @@ class AppWin(MainWindow):
                 # accept - False / request - False
                 if (self.acceptingConnection == False) and (self.requestingConnection == False):
                     self.requestingConnection = True
-                    self.insert_text('Server: Requesting a connection...')
+                    self.insert_text('Server ==> Requesting a connection...')
                     # Create connection packet and send
                     self.sendPacket('connect')
                     return
@@ -81,11 +90,11 @@ class AppWin(MainWindow):
                     status = 2
                     self.clearSession()
                     self.statusRefresh()
-                    self.insert_text('Server: You are connected.')
+                    self.insert_text('Server ==> You are connected.')
                     self.acceptingConnection = False
                     return
             else:
-                self.insert_text('Peer doesn\'t respond')
+                self.insert_text('Server ==> Remote peer doesn\'t respond')
                 return
         else:
             return
@@ -100,18 +109,18 @@ class AppWin(MainWindow):
             if (self.requestingConnection == False) and (self.acceptingConnection == True):
                 self.sendPacket('disconnect')
                 self.acceptingConnection = False
-                self.insert_text('Server: You rejected the connection.')
+                self.insert_text('Server ==> You rejected the connection.')
                 return
             elif (self.requestingConnection == True) and (self.acceptingConnection == False):
                 self.requestingConnection = False
                 self.sendPacket('disconnect')
-                self.insert_text('Server: You aborted the connection.')
+                self.insert_text('Server ==> You aborted the connection.')
                 return
             else:
                 return
         else:
             self.sendPacket('disconnect')
-            self.insert_text('Server: Disconnecting')
+            self.insert_text('Server ==> You disconnected.')
             status = 1
             self.statusRefresh()
             return
@@ -119,8 +128,11 @@ class AppWin(MainWindow):
     def on_start_server(self):
         global status
         if status == 0:
-            status = 1
-            self.statusRefresh()
+            if self.currentIP == '':
+                self.throw_error_win('You have to set a peer ip address or hostname first.')
+            else:
+                status = 1
+                self.statusRefresh()
 
     def on_stop_server(self):
         global status
@@ -143,11 +155,17 @@ class AppWin(MainWindow):
             t.start()
 
     def getTimeOffset(self):
-        c = ntplib.NTPClient()
-        response = c.request('pool.ntp.org')
-        ntpTime = response.tx_time
-        localTime = time.time()
-        self.offset = localTime - ntpTime
+        try:
+            c = ntplib.NTPClient()
+            response = c.request('pool.ntp.org')
+            ntpTime = response.tx_time
+            localTime = time.time()
+            self.offset = localTime - ntpTime
+        except socket.gaierror:
+            self.throw_error_win('Problem accessing NTP server, please check your internet'
+                                 ' connection.')
+            self.error_button.configure(command=self.on_exit)
+            self.error_window.lift()
 
     def toNTPTime(self, time):
         return time - self.offset
@@ -179,9 +197,18 @@ class AppWin(MainWindow):
             raise Exception('Wrong type of packet to send..')
 
         packet.setTimeStamp(app.toNTPTime(time.time()))
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(packet.getTotalPacket(), (self.currentIP, REMOTE_PORT))
-        sock.close()
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.sendto(packet.getTotalPacket(), (self.currentIP, REMOTE_PORT))
+            sock.close()
+        except socket.error as err:
+            if err.errno == errno.ENETUNREACH:
+                self.setDebug('Network Unreachable.')
+        except socket.gaierror:
+            self.setDebug('Problem with DNS resolution')
+        except UnicodeError:
+            self.setDebug('Please provide a valid IP or hostname.')
+
         if DEBUG:
             self.packetDebug(packet)
 
@@ -202,12 +229,20 @@ class AppWin(MainWindow):
         pingPacket.setControl()
         pingPacket.setState('ping')
         pingPacket.setTimeStamp(app.toNTPTime(time.time()))
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(pingPacket.getTotalPacket(),
-                    (self.currentIP, REMOTE_PORT))
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.sendto(pingPacket.getTotalPacket(), (self.currentIP, REMOTE_PORT))
+            sock.close()
+        except socket.error as err:
+            if err.errno == errno.ENETUNREACH:
+                self.setDebug('Network Unreachable.')
+        except socket.gaierror:
+            self.setDebug('Problem with DNS resolution')
+        except UnicodeError:
+            self.setDebug('Please provide a valid IP or hostname.')
+
         if DEBUG:
             self.packetDebug(pingPacket)
-        sock.close()
         time.sleep(1)
         if self.peerIsAlive:
             self.peerIsAlive = False
@@ -238,7 +273,7 @@ class AppWin(MainWindow):
                     if packet.getError() == 'parallelConnect':
                         self.sendPacket('disconnect')
                         self.requestingConnection = False
-                        self.insert_text('Parallel connection Error, please try again..')
+                        self.insert_text('Server ==> Parallel connection Error, please try again..')
 
                 # Request or accept connection
                 elif packet.isControl() and not packet.isAcknowledge() and \
@@ -246,7 +281,7 @@ class AppWin(MainWindow):
                     if (self.requestingConnection == False) and \
                             (self.acceptingConnection == False):
                         self.acceptingConnection = True
-                        self.insert_text('Server: Peer ' + str(self.currentIP) +
+                        self.insert_text('Server ==> Peer ' + str(self.currentIP) +
                                          ' wants to connect.')
                     elif (self.requestingConnection == True) and \
                             (self.acceptingConnection == False):
@@ -254,14 +289,14 @@ class AppWin(MainWindow):
                         self.sendPacket('disconnect')
                         self.requestingConnection = False
                         self.sendPacket('error', error='parallelConnect')
-                        self.insert_text('Parallel connection Error. Please try again..')
+                        self.insert_text('Server ==> Parallel connection Error. Please try again..')
 
                 elif packet.isControl and not packet.isAcknowledge() and \
                         (packet.getState() == 'acceptConnect'):
                     if (self.requestingConnection == True) and \
                             (self.acceptingConnection == False):
                         self.requestingConnection = False
-                        self.insert_text('Server: Connection started!')
+                        self.insert_text('Server ==> Connection started!')
                         status = 2
                         self.clearSession()
                         self.statusRefresh()
@@ -271,11 +306,11 @@ class AppWin(MainWindow):
                     if (self.requestingConnection == True) and \
                             (self.acceptingConnection == False):
                         self.requestingConnection = False
-                        self.insert_text('Server: Connection refused.')
+                        self.insert_text('Server ==> Connection refused.')
                     elif (self.requestingConnection == False) and \
                             (self.acceptingConnection == True):
                         self.acceptingConnection = False
-                        self.insert_text('Server: Connection aborted from peer.')
+                        self.insert_text('Server ==> Connection aborted from remote peer.')
 
                 elif packet.isControl() and not packet.isAcknowledge() and \
                         (packet.getState() == 'pong'):
@@ -295,7 +330,7 @@ class AppWin(MainWindow):
                                 self.dataSeqForAckList.remove(ack)
 
                     elif packet.getState() == 'disconnect':
-                        self.insert_text('Server: Peer is disconnecting..')
+                        self.insert_text('Server ==> Remote peer disconnected.')
                         status = 1
                         self.statusRefresh()
 
@@ -314,7 +349,7 @@ class AppWin(MainWindow):
                         self.dataSeqList.append(seq)
                         self.sendPacket('acknowledge', packetForAck=packet)
                         message = packet.getMessage()
-                        self.insert_text(str(self.currentIP) + ': ' + message)
+                        self.insert_text('Peer ==> ' + message)
 
 
 class client(threading.Thread):
@@ -334,25 +369,33 @@ class client(threading.Thread):
     def run(self):
         global status
         while True:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.sendto(self.packet.getTotalPacket(), (app.currentIP, REMOTE_PORT))
-            if DEBUG:
-                app.packetDebug(self.packet)
-            time.sleep(self.timeToSleep)
-            self.timeToSleep *= 2
-            if self.ourDataSequence not in app.dataSeqForAckList:
-                sock.close()
-                break
-            if self.newTime > ACK_WAIT_TIME:
-                sock.close()
-                app.insert_text('Server: Unpredicted disconnection..')
-                status = 1
-                app.statusRefresh()
-                break
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.sendto(self.packet.getTotalPacket(), (app.currentIP, REMOTE_PORT))
+                if DEBUG:
+                    app.packetDebug(self.packet)
+                time.sleep(self.timeToSleep)
+                self.timeToSleep *= 2
+                if self.ourDataSequence not in app.dataSeqForAckList:
+                    sock.close()
+                    break
+                if self.newTime > ACK_WAIT_TIME:
+                    sock.close()
+                    app.insert_text('Server ==> Unpredicted disconnection..')
+                    status = 1
+                    app.statusRefresh()
+                    break
+            except socket.error as err:
+                if err.errno == errno.ENETUNREACH:
+                    app.setDebug('Network Unreachable.')
+            except socket.gaierror:
+                app.setDebug('Problem with DNS resolution')
+            except UnicodeError:
+                app.setDebug('Please provide a valid IP or hostname.')
+
             timeLap = time.time() - self.oldTime
             self.oldTime = time.time()
             self.newTime += timeLap
-            # app.debug_label.configure(text='Pending packets: ' + str(len(app.dataSeqForAckList)))
 
 
 if __name__ == "__main__":

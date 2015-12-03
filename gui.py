@@ -151,6 +151,7 @@ class MainWindow(tk.Tk):
         self.output_text = CustomText(self.output_frame, height=10, width=40,
                                       yscrollcommand=self.scrollbar.set)
         self.output_text.tag_configure("green", foreground="green")
+        self.output_text.tag_configure("red", foreground="red")
         self.output_text.pack(side="left", fill="both", expand=True)
 
         # Create Input frame
@@ -176,12 +177,15 @@ class MainWindow(tk.Tk):
         self.sep = ttk.Separator(self.debug_frame)
         self.sep.pack(fill="x", pady=3)
 
-        self.debug_label = tk.Label(self.debug_frame, text="Pending packets: ")
+        self.debug_label = tk.Label(self.debug_frame)
         self.debug_label.pack(side="left")
+
 
     # Functions of the menu buttons
     def insert_text(self, txt):
         self.output_text.insert("end", txt + "\n")
+        self.output_text.highlight_pattern('Server ==>', 'red')
+        self.output_text.highlight_pattern('Peer ==>', 'green')
         self.output_text.see("end")
 
     def on_manage_peers(self):
