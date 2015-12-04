@@ -8,30 +8,36 @@ MAX_BYTES = 65535
 ACK_WAIT_TIME = 1.0
 DEBUG = False
 
-
+# Main application window
 class AppWin(MainWindow):
     def __init__(self):
         MainWindow.__init__(self)
-        # Creating server thread
+        # Creating and starting server thread
         self.t1 = threading.Thread(target=self.server)
-        self.t1.start()  # Starting the server thread
+        self.t1.start()
+        # Thread for showing always the current state (ONLINE, OFFLINE, CONNECTED)
         self.statusThread = threading.Thread(target=self.statusRefresh)
         self.statusThread.start()
 
         self.currentIP = ''
-        self.dataSequence = 0  # Sequence number for sending data packets
+        self.dataSequence = 0   # Sequence number of current sending data packet
+        # List with sequence numbers of data packet's sent that haven't yet been uknowledged
         self.dataSeqForAckList = []
+        # Sequence numbers of data packets that have already been received at least once
         self.dataSeqList = []
-        self.lostPackets = 0  # Total number of lost packets
-        self.getTimeOffset()  # Create offset for time synchronization
+        self.getTimeOffset()    # Create offset between the local machine and ntp time
+        # Two substates according to who sent first connection requesting packet
         self.requestingConnection = False
-        self.acceptingConnection = False
+        self.receivingConnection = False
+
         self.peerIsAlive = False
 
+    # Cler lists every time a new session starts
     def clearSession(self):
         self.dataSeqForAckList = []
         self.dataSeqList = []
 
+    # Set 'Debug = True' at the beginning of the file for some console debug
     def packetDebug(self, packet):
         print('------------------------')
         if type(packet) == PacketOut:
@@ -56,11 +62,13 @@ class AppWin(MainWindow):
         print(time.strftime('%H:%M:%S.%f')[:-2])
         print();print()
 
+    # Set debug messages at the bottom left of the main window
     def setDebug(self, message):
         timeText = time.strftime('%H:%M:%S ==> ')
         totalMessage = timeText + message
         self.debug_label.configure(text=totalMessage)
 
+    # Key method for giving currentIP the entry value from the user
     def on_setPeer(self):
         if status == 0:
             self.currentIP = self.ipEntry.get()
@@ -69,29 +77,31 @@ class AppWin(MainWindow):
             self.insert_text('Server ==> You have to stop the server in order to change'
                              ' IP/hostname.')
 
-    # Connect button function
+    # Function run when pressing the connect button. Checks if status == 1 and if yes
+    # checks to see if remote peer is listening. If no one has requested a connection
+    # we request first. Else we just accept the connection and change the status to 2
     def on_connect(self):
         global status
         if status == 0:
             return
         elif status == 1:
             if self.peerAlive() == True:
-                # accept - False / request - False
-                if (self.acceptingConnection == False) and (self.requestingConnection == False):
+                # receive - False / request - False
+                if (self.receivingConnection == False) and (self.requestingConnection == False):
                     self.requestingConnection = True
                     self.insert_text('Server ==> Requesting a connection...')
                     # Create connection packet and send
                     self.sendPacket('connect')
                     return
-                # accept - True / request - False
-                elif (self.acceptingConnection == True) and (self.requestingConnection == False):
+                # receive - True / request - False
+                elif (self.receivingConnection == True) and (self.requestingConnection == False):
                     # You connect
                     self.sendPacket('acceptConnect')
                     status = 2
                     self.clearSession()
                     self.statusRefresh()
                     self.insert_text('Server ==> You are connected.')
-                    self.acceptingConnection = False
+                    self.receivingConnection = False
                     return
             else:
                 self.insert_text('Server ==> Remote peer doesn\'t respond')
@@ -99,19 +109,21 @@ class AppWin(MainWindow):
         else:
             return
 
-    # Disonnect button function
+    # Function run when pressing the disconnect button. If status is 1, and we received
+    # a connection request we just REJECT it, else if we have requested a connection
+    # we just ABORT it. If status is 2 then we return to status 1 (ONLINE) but not connected
     def on_disconnect(self):
         global status
         if status == 0:
             return
         elif status == 1:
             # request - False / accept - True
-            if (self.requestingConnection == False) and (self.acceptingConnection == True):
+            if (self.requestingConnection == False) and (self.receivingConnection == True):
                 self.sendPacket('disconnect')
-                self.acceptingConnection = False
+                self.receivingConnection = False
                 self.insert_text('Server ==> You rejected the connection.')
                 return
-            elif (self.requestingConnection == True) and (self.acceptingConnection == False):
+            elif (self.requestingConnection == True) and (self.receivingConnection == False):
                 self.requestingConnection = False
                 self.sendPacket('disconnect')
                 self.insert_text('Server ==> You aborted the connection.')
@@ -125,6 +137,7 @@ class AppWin(MainWindow):
             self.statusRefresh()
             return
 
+    # Function run when we press the "server/start" button
     def on_start_server(self):
         global status
         if status == 0:
@@ -134,26 +147,29 @@ class AppWin(MainWindow):
                 status = 1
                 self.statusRefresh()
 
+    # Function run when we press the "server/stop" button
     def on_stop_server(self):
         global status
         if (status == 2) or (status == 1):
             self.sendPacket('disconnect')
-            self.acceptingConnection = False
+            self.receivingConnection = False
         status = 0
         self.statusRefresh()
 
-    # Send_data function
+    # Function run when we press enter on the input widget
     def on_enter_press(self, event):
         if (status == 0) or (status == 1):
-            app.userInputEntry.delete(0, 'end')
+            app.userInputEntry.delete(0, 'end')     # Delete whatever is inside the entry widget
             return
         else:
             inputText = app.userInputEntry.get()
-            app.userInputEntry.delete(0, 'end')
-            self.insert_text(inputText)
+            app.userInputEntry.delete(0, 'end')     # Delete whatever is inside the entry widget
+            self.insert_text(inputText)     # Print the text in the text widget
+            # Send the message to the remote peer
             t = client(inputText)
             t.start()
 
+    # Take local time and NTP time and get create an offset in seconds
     def getTimeOffset(self):
         try:
             c = ntplib.NTPClient()
@@ -167,20 +183,26 @@ class AppWin(MainWindow):
             self.error_button.configure(command=self.on_exit)
             self.error_window.lift()
 
+    # Takes local time and return NTP time
     def toNTPTime(self, time):
         return time - self.offset
 
+    # Takes NTP time and returns local time
     def toLocalTime(self, time):
         return time + self.offset
 
-
+    # Sends all kinds of Control (non data) packets. Type is required for any kind of packets.
+    # error is required for "error" type packets and "packeForAck" is required for acknowledges
     def sendPacket(self, type, error=None, packetForAck=None):
+        global status
+        # Packet types:
         # 'connect', 'acceptConnect', 'disconnect', 'error', 'pong', 'acknowledge'
-        packet = PacketOut()
-        packet.setControl()
+        packet = PacketOut()    # Create new packet instance
+        packet.setControl()     # Make it control packet
         if type == 'acknowledge':
-            packForAck = packetForAck
-            packet.setAcknowledge()
+            packForAck = packetForAck   # Take from the parameters the actual packet to acknowledge
+            packet.setAcknowledge()     # Make the sending packet of acknowledge type
+            # Take the number to acknowledge and set it to the appropriate field
             packet.setAckSequenceNumber(packForAck.getSequenceNumber())
         elif type == 'error':
             packet.setState('error')
@@ -196,14 +218,18 @@ class AppWin(MainWindow):
         else:
             raise Exception('Wrong type of packet to send..')
 
+        # Add timestamp to every packet
         packet.setTimeStamp(app.toNTPTime(time.time()))
         try:
+            # Send the packet
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.sendto(packet.getTotalPacket(), (self.currentIP, REMOTE_PORT))
             sock.close()
         except socket.error as err:
             if err.errno == errno.ENETUNREACH:
                 self.setDebug('Network Unreachable.')
+                status = 0
+                self.statusRefresh()
         except socket.gaierror:
             self.setDebug('Problem with DNS resolution')
         except UnicodeError:
@@ -212,6 +238,7 @@ class AppWin(MainWindow):
         if DEBUG:
             self.packetDebug(packet)
 
+    # Method runing as thread displaying current status
     def statusRefresh(self):
         self.offlineConf = {'text': 'Offline', 'foreground': 'red'}
         self.onlineConf = {'text': 'Online', 'foreground': 'orange'}
@@ -224,7 +251,10 @@ class AppWin(MainWindow):
         else:
             self.status_label.configure(self.connectedConf)
 
+    # Checks is remote peer is alive berore doing specific actions.
+    # Changes peerIsAlive bollean accordingly
     def peerAlive(self):
+        global status
         pingPacket = PacketOut()
         pingPacket.setControl()
         pingPacket.setState('ping')
@@ -236,6 +266,8 @@ class AppWin(MainWindow):
         except socket.error as err:
             if err.errno == errno.ENETUNREACH:
                 self.setDebug('Network Unreachable.')
+                status = 0
+                self.statusRefresh()
         except socket.gaierror:
             self.setDebug('Problem with DNS resolution')
         except UnicodeError:
@@ -250,6 +282,10 @@ class AppWin(MainWindow):
         else:
             return False
 
+    # The server thread-method. Binds the local IP and port 50001 to the socket and enters a loop.
+    # Takes the data and checks if the first 8 bytes are the string 'odyaris1'. Then acts
+    # according to the status. If status is 0 simply sends 'disconnect' packet on every 'accept'
+    # packet it arrives. Ignores any other packet. Case of status 1 and 2 are commented below.
     def server(self):
         global status
         self.serverSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -268,72 +304,95 @@ class AppWin(MainWindow):
                     self.sendPacket('disconnect')
 
             elif status == 1:
+                # If it's "error" packet and the error is "parallelConnect" means that the
+                # remote peer sent a "connect" packet and insted of "acceptConnect" or "disconnect"
+                # received again "connect" packet. This preventes from forever waiting loop.
                 if packet.isControl() and not packet.isAcknowledge() and \
                         (packet.getState() == 'error'):
                     if packet.getError() == 'parallelConnect':
                         self.sendPacket('disconnect')
                         self.requestingConnection = False
-                        self.insert_text('Server ==> Parallel connection Error, please try again..')
+                        self.insert_text('Server ==> Parallel connection Error,'
+                                         ' please try again..')
 
-                # Request or accept connection
+                # If it's "connect" packet and we haven't already sent anything it means the
+                # peer is requesting connection. So the local user is informed and
+                # receiving connection is becoming True.
+                # If requestingConnection is True then it means we've send already a "connect"
+                # packet so except "disconnect" or "acceptConnect". So now we have "parallel
+                # connection" error. We send the appropriate error packet and set
+                # requestingConnection to False.
                 elif packet.isControl() and not packet.isAcknowledge() and \
                         (packet.getState() == 'connect'):
                     if (self.requestingConnection == False) and \
-                            (self.acceptingConnection == False):
-                        self.acceptingConnection = True
+                            (self.receivingConnection == False):
+                        self.receivingConnection = True
                         self.insert_text('Server ==> Peer ' + str(self.currentIP) +
                                          ' wants to connect.')
                     elif (self.requestingConnection == True) and \
-                            (self.acceptingConnection == False):
-                        # Send error - both requesting connection
+                            (self.receivingConnection == False):
                         self.sendPacket('disconnect')
                         self.requestingConnection = False
                         self.sendPacket('error', error='parallelConnect')
-                        self.insert_text('Server ==> Parallel connection Error. Please try again..')
+                        self.insert_text('Server ==> Parallel connection Error.'
+                                         ' Please try again..')
 
+                # If it's "acceptConnect" packet and have already requested a connection
+                # we go to status 2 and begin the connection.
                 elif packet.isControl and not packet.isAcknowledge() and \
                         (packet.getState() == 'acceptConnect'):
                     if (self.requestingConnection == True) and \
-                            (self.acceptingConnection == False):
+                            (self.receivingConnection == False):
                         self.requestingConnection = False
                         self.insert_text('Server ==> Connection started!')
                         status = 2
                         self.clearSession()
                         self.statusRefresh()
 
+                # If it's "disconnect" packet then if we had requested connection the request
+                # is refused and we turn requestingConnection back to False.
+                # Else if a "request" had been sent by the remote peer it means it aborts the
+                # connection request. receivingConnection is set back to False.
                 elif packet.isControl() and not packet.isAcknowledge() and \
                         (packet.getState() == 'disconnect'):
                     if (self.requestingConnection == True) and \
-                            (self.acceptingConnection == False):
+                            (self.receivingConnection == False):
                         self.requestingConnection = False
                         self.insert_text('Server ==> Connection refused.')
                     elif (self.requestingConnection == False) and \
-                            (self.acceptingConnection == True):
-                        self.acceptingConnection = False
+                            (self.receivingConnection == True):
+                        self.receivingConnection = False
                         self.insert_text('Server ==> Connection aborted from remote peer.')
 
+                # If packet is "pong" then set peerIsAlive to True. It's used by peerAlive().
                 elif packet.isControl() and not packet.isAcknowledge() and \
                         (packet.getState() == 'pong'):
                     self.peerIsAlive = True
-
+                # If packet is ping send pong
                 elif packet.isControl() and not packet.isAcknowledge() and \
                         (packet.getState() == 'ping'):
                     self.sendPacket('pong')
 
             else:
-                # Receiving messages
+                # Status is 2 (connected)
                 if packet.isControl():
+                    # If it's acknowledge get the sequence number of the packet it acknowledges
+                    # and remove it from the list
                     if packet.isAcknowledge():
                         ack = packet.getAckSequenceNumber()
                         if len(self.dataSeqForAckList) is not 0:
                             if ack in self.dataSeqForAckList:
                                 self.dataSeqForAckList.remove(ack)
 
+                    # If the packet is "disconnect" change status to 1
                     elif packet.getState() == 'disconnect':
                         self.insert_text('Server ==> Remote peer disconnected.')
                         status = 1
                         self.statusRefresh()
 
+                    # If the packet is "connect" and the ip is the same as when you first
+                    # connected clear the session and send "acceptConnect".
+                    # Continue connection like nothing happened.
                     elif (packet.getState() == 'connect') and (address[0] == self.currentIP):
                         self.sendPacket('acceptConnect')
                         self.clearSession()
@@ -341,7 +400,8 @@ class AppWin(MainWindow):
                     elif packet.getState() == 'ping':
                         self.sendPacket('pong')
                 else:
-                    # packet is data
+                    # If the packet is data, if it's been received before ignore it, else
+                    # append it to dataSeqList, send acknowledge and print the message
                     seq = packet.getSequenceNumber()
                     if seq in self.dataSeqList:
                         continue
@@ -352,19 +412,25 @@ class AppWin(MainWindow):
                         self.insert_text('Peer ==> ' + message)
 
 
+# Thread for sending the data packets. It sends the packet, get's into sleep for some time, checks
+# if acknowledge has been received. If yes it exits, else it doubles the time to sleep and resends
+# the packet. Does this until timeToSleep has reached 1 second.
 class client(threading.Thread):
     def __init__(self, message):
         threading.Thread.__init__(self)
         self.message = message
-        self.packet = PacketOut(self.message)
+        self.packet = PacketOut(self.message)   # Create new packet instance with the message
         app.dataSequence += 1
-        self.ourDataSequence = app.dataSequence
-        self.packet.setSequenceNumber(self.ourDataSequence)
-        app.dataSeqForAckList.append(self.ourDataSequence)
+        # Take a copy of dataSequence because it may be changed the same time by other running
+        # threads
+        self.tmpDataSequence = app.dataSequence
+        self.packet.setSequenceNumber(self.tmpDataSequence) # Set sequence number
+        app.dataSeqForAckList.append(self.tmpDataSequence)  # Put it in the list for acknowledge
+        # Create variables for counting the time
         self.timeToSleep = 0.01
         self.newTime = 0
         self.timestamp = self.oldTime = time.time()
-        self.packet.setTimeStamp(app.toNTPTime(self.timestamp))
+        self.packet.setTimeStamp(app.toNTPTime(self.timestamp)) # Set timestamp to the packet
 
     def run(self):
         global status
@@ -376,10 +442,13 @@ class client(threading.Thread):
                     app.packetDebug(self.packet)
                 time.sleep(self.timeToSleep)
                 self.timeToSleep *= 2
-                if self.ourDataSequence not in app.dataSeqForAckList:
+                if self.tmpDataSequence not in app.dataSeqForAckList:
+                    # The server socket has found that an acknowledge is received and removed the
+                    # sequence number from the list. So we exit.
                     sock.close()
                     break
                 if self.newTime > ACK_WAIT_TIME:
+                    # The "time out" has been reached so the packet won't be sent again
                     sock.close()
                     app.insert_text('Server ==> Unpredicted disconnection..')
                     status = 1
@@ -388,11 +457,13 @@ class client(threading.Thread):
             except socket.error as err:
                 if err.errno == errno.ENETUNREACH:
                     app.setDebug('Network Unreachable.')
+                    status = 0
+                    app.statusRefresh()
             except socket.gaierror:
                 app.setDebug('Problem with DNS resolution')
             except UnicodeError:
                 app.setDebug('Please provide a valid IP or hostname.')
-
+            # Renewing the time to sleep
             timeLap = time.time() - self.oldTime
             self.oldTime = time.time()
             self.newTime += timeLap
