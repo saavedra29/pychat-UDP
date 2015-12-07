@@ -71,8 +71,11 @@ class AppWin(MainWindow):
     # Key method for giving currentIP the entry value from the user
     def on_setPeer(self):
         if status == 0:
-            self.currentIP = self.ipEntry.get()
-            self.insert_text('Server ==> IP of hostname set!')
+            if self.ipEntry.get() != '':
+                self.currentIP = self.ipEntry.get()
+                self.insert_text('Server ==> IP of hostname set!')
+            else:
+                self.insert_text('Server ==> Please enter IP or Hostname.')
         else:
             self.insert_text('Server ==> You have to stop the server in order to change'
                              ' IP/hostname.')
@@ -83,6 +86,8 @@ class AppWin(MainWindow):
     def on_connect(self):
         global status
         if status == 0:
+            self.insert_text('Server ==> You have to start the set IP/hostname and start '
+                             'the server before connecting.')
             return
         elif status == 1:
             if self.peerAlive() == True:
