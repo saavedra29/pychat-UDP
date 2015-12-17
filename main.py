@@ -6,7 +6,7 @@ LOCAL_PORT = 50001
 REMOTE_PORT = 50001
 MAX_BYTES = 65535
 ACK_WAIT_TIME = 1.0
-DEBUG = False
+DEBUG = True
 
 # Main application window
 class AppWin(MainWindow):
@@ -226,10 +226,7 @@ class AppWin(MainWindow):
         # Add timestamp to every packet
         packet.setTimeStamp(app.toNTPTime(time.time()))
         try:
-            # Send the packet
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.sendto(packet.getTotalPacket(), (self.currentIP, REMOTE_PORT))
-            sock.close()
+            self.serverSock.sendto(packet.getTotalPacket(), (self.currentIP, REMOTE_PORT))
         except socket.error as err:
             if err.errno == errno.ENETUNREACH:
                 self.setDebug('Network Unreachable.')
@@ -265,9 +262,7 @@ class AppWin(MainWindow):
         pingPacket.setState('ping')
         pingPacket.setTimeStamp(app.toNTPTime(time.time()))
         try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.sendto(pingPacket.getTotalPacket(), (self.currentIP, REMOTE_PORT))
-            sock.close()
+            self.serverSock.sendto(pingPacket.getTotalPacket(), (self.currentIP, REMOTE_PORT))
         except socket.error as err:
             if err.errno == errno.ENETUNREACH:
                 self.setDebug('Network Unreachable.')
@@ -441,8 +436,7 @@ class client(threading.Thread):
         global status
         while True:
             try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                sock.sendto(self.packet.getTotalPacket(), (app.currentIP, REMOTE_PORT))
+                app.serverSock.sendto(self.packet.getTotalPacket(), (app.currentIP, REMOTE_PORT))
                 if DEBUG:
                     app.packetDebug(self.packet)
                 time.sleep(self.timeToSleep)
@@ -450,11 +444,9 @@ class client(threading.Thread):
                 if self.tmpDataSequence not in app.dataSeqForAckList:
                     # The server socket has found that an acknowledge is received and removed the
                     # sequence number from the list. So we exit.
-                    sock.close()
                     break
                 if self.newTime > ACK_WAIT_TIME:
                     # The "time out" has been reached so the packet won't be sent again
-                    sock.close()
                     app.insert_text('Server ==> Unpredicted disconnection..')
                     status = 1
                     app.statusRefresh()
