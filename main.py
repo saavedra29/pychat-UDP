@@ -6,7 +6,18 @@ LOCAL_PORT = 50001
 REMOTE_PORT = 50001
 MAX_BYTES = 65535
 ACK_WAIT_TIME = 1.0
-DEBUG = True
+DEBUG = False
+
+class setDebug(threading.Thread):
+    def __init__(self, message):
+        threading.Thread.__init__(self)
+        self.message = message
+    def run(self):
+        timeText = time.strftime('%H:%M:%S ==> ')
+        totalMessage = timeText + self.message
+        app.debug_label.configure(text=totalMessage)
+        time.sleep(5)
+        app.debug_label.configure(text = '')
 
 # Main application window
 class AppWin(MainWindow):
@@ -61,12 +72,6 @@ class AppWin(MainWindow):
         time = datetime.datetime.fromtimestamp(timeStamp)
         print(time.strftime('%H:%M:%S.%f')[:-2])
         print();print()
-
-    # Set debug messages at the bottom left of the main window
-    def setDebug(self, message):
-        timeText = time.strftime('%H:%M:%S ==> ')
-        totalMessage = timeText + message
-        self.debug_label.configure(text=totalMessage)
 
     # Key method for giving currentIP the entry value from the user
     def on_setPeer(self):
@@ -229,13 +234,16 @@ class AppWin(MainWindow):
             self.serverSock.sendto(packet.getTotalPacket(), (self.currentIP, REMOTE_PORT))
         except socket.error as err:
             if err.errno == errno.ENETUNREACH:
-                self.setDebug('Network Unreachable.')
+                debugThread = setDebug('Network Unreachable')
+                debugThread.start()
                 status = 0
                 self.statusRefresh()
         except socket.gaierror:
-            self.setDebug('Problem with DNS resolution')
+            debugThread = setDebug('Problem with DNS resolution')
+            debugThread.start()
         except UnicodeError:
-            self.setDebug('Please provide a valid IP or hostname.')
+            debugThread = setDebug('Please provide a valid IP or hostname')
+            debugThread.start()
 
         if DEBUG:
             self.packetDebug(packet)
@@ -265,13 +273,16 @@ class AppWin(MainWindow):
             self.serverSock.sendto(pingPacket.getTotalPacket(), (self.currentIP, REMOTE_PORT))
         except socket.error as err:
             if err.errno == errno.ENETUNREACH:
-                self.setDebug('Network Unreachable.')
+                debugThread = setDebug('Network Unreachable')
+                debugThread.start()
                 status = 0
                 self.statusRefresh()
         except socket.gaierror:
-            self.setDebug('Problem with DNS resolution')
+            debugThread = setDebug('Problem with DNS resolution')
+            debugThread.start()
         except UnicodeError:
-            self.setDebug('Please provide a valid IP or hostname.')
+            debugThread = setDebug('Please provide a valid IP or hostname')
+            debugThread.start()
 
         if DEBUG:
             self.packetDebug(pingPacket)
@@ -289,6 +300,7 @@ class AppWin(MainWindow):
     def server(self):
         global status
         self.serverSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        buffSize = self.serverSock
         self.serverSock.bind(('', LOCAL_PORT))
         while True:
             data, address = self.serverSock.recvfrom(MAX_BYTES)
@@ -453,17 +465,21 @@ class client(threading.Thread):
                     break
             except socket.error as err:
                 if err.errno == errno.ENETUNREACH:
-                    app.setDebug('Network Unreachable.')
+                    debugThread = setDebug('Network Unreachable')
+                    debugThread.start()
                     status = 0
                     app.statusRefresh()
             except socket.gaierror:
-                app.setDebug('Problem with DNS resolution')
+                debugThread = setDebug('Problem with DNS resolution')
+                debugThread.start()
             except UnicodeError:
-                app.setDebug('Please provide a valid IP or hostname.')
+                debugThread = setDebug('Please provide a valid IP or hostname')
+                debugThread.start()
             # Renewing the time to sleep
             timeLap = time.time() - self.oldTime
             self.oldTime = time.time()
             self.newTime += timeLap
+
 
 
 if __name__ == "__main__":
