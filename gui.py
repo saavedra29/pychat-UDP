@@ -39,15 +39,24 @@ class MainWindow(tk.Tk):
         self.config(menu=self.menubar)
 
         # Create File menu and add it to the menubar
-        file_menu = tk.Menu(self.menubar, tearoff=False)
-        self.menubar.add_cascade(label="File", menu=file_menu)
-        file_menu.add_command(label="Exit", command=self.on_exit)
+        self.file_menu = tk.Menu(self.menubar, tearoff=False)
+        self.menubar.add_cascade(label="File", menu=self.file_menu)
+        self.file_menu.add_command(label="Exit", command=self.on_exit)
 
         # Server menu
-        server_menu = tk.Menu(self.menubar, tearoff=False)
-        self.menubar.add_cascade(label="Server", menu=server_menu)
-        server_menu.add_command(label="Start server", command=self.on_start_server)
-        server_menu.add_command(label="Stop server", command=self.on_stop_server)
+        self.server_menu = tk.Menu(self.menubar, tearoff=False)
+        self.menubar.add_cascade(label="Server", menu=self.server_menu)
+        self.server_menu.add_command(label="Start server", command=self.on_start_server)
+        self.server_menu.add_command(label="Stop server", command=self.on_stop_server)
+
+        # Encryption menu
+        self.gen_key_menu = tk.Menu(self.menubar, tearoff=False)
+        self.menubar.add_cascade(label="Encryption", menu=self.gen_key_menu)
+        self.gen_key_menu.add_command(label="Encryption on", command=self.on_encryption_on)
+        self.gen_key_menu.add_command(label="Encryption off", command=self.on_encryption_off)
+        self.gen_key_menu.add_command(label="Generate key", command=self.on_generate_key)
+
+
 
         # Create Connection frame
         self.connection_frame = tk.Frame(self, borderwidth=5)
@@ -154,6 +163,15 @@ class MainWindow(tk.Tk):
     # Send_data function
     def on_enter_press(self, event):
         print("enter key pressed")
+
+    def on_encryption_on(self):
+        pass
+
+    def on_encryption_off(self):
+        pass
+
+    def on_generate_key(self):
+        pass
 
     def throw_error_win(self, errorMessage):
         # Pop up window for errors
