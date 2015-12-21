@@ -1,12 +1,7 @@
 from gui import MainWindow
-import socket, threading, time, ntplib, datetime, errno
+import socket, threading, time, ntplib, datetime, errno, client
 from pack import PacketOut, PacketIn
 
-LOCAL_PORT = 50001
-REMOTE_PORT = 50001
-MAX_BYTES = 65535
-ACK_WAIT_TIME = 1.0
-DEBUG = False
 
 class setDebug(threading.Thread):
     def __init__(self, message):
@@ -23,6 +18,10 @@ class setDebug(threading.Thread):
 class AppWin(MainWindow):
     def __init__(self):
         MainWindow.__init__(self)
+        self.DEBUG = False
+        self.LOCAL_PORT = 50001
+        self.REMOTE_PORT = 50001
+        self.MAX_BYTES = 65535
         # Creating and starting server thread
         self.t1 = threading.Thread(target=self.server)
         self.t1.start()
@@ -176,7 +175,7 @@ class AppWin(MainWindow):
             app.userInputEntry.delete(0, 'end')     # Delete whatever is inside the entry widget
             self.insert_text(inputText)     # Print the text in the text widget
             # Send the message to the remote peer
-            t = client(inputText)
+            t = client.Client(inputText, self)
             t.start()
 
     # Take local time and NTP time and get create an offset in seconds
@@ -231,7 +230,7 @@ class AppWin(MainWindow):
         # Add timestamp to every packet
         packet.setTimeStamp(app.toNTPTime(time.time()))
         try:
-            self.serverSock.sendto(packet.getTotalPacket(), (self.currentIP, REMOTE_PORT))
+            self.serverSock.sendto(packet.getTotalPacket(), (self.currentIP, self.REMOTE_PORT))
         except socket.error as err:
             if err.errno == errno.ENETUNREACH:
                 debugThread = setDebug('Network Unreachable')
@@ -245,7 +244,7 @@ class AppWin(MainWindow):
             debugThread = setDebug('Please provide a valid IP or hostname')
             debugThread.start()
 
-        if DEBUG:
+        if self.DEBUG:
             self.packetDebug(packet)
 
     # Method runing as thread displaying current status
@@ -270,7 +269,7 @@ class AppWin(MainWindow):
         pingPacket.setState('ping')
         pingPacket.setTimeStamp(app.toNTPTime(time.time()))
         try:
-            self.serverSock.sendto(pingPacket.getTotalPacket(), (self.currentIP, REMOTE_PORT))
+            self.serverSock.sendto(pingPacket.getTotalPacket(), (self.currentIP, self.REMOTE_PORT))
         except socket.error as err:
             if err.errno == errno.ENETUNREACH:
                 debugThread = setDebug('Network Unreachable')
@@ -284,7 +283,7 @@ class AppWin(MainWindow):
             debugThread = setDebug('Please provide a valid IP or hostname')
             debugThread.start()
 
-        if DEBUG:
+        if self.DEBUG:
             self.packetDebug(pingPacket)
         time.sleep(1)
         if self.peerIsAlive:
@@ -300,12 +299,11 @@ class AppWin(MainWindow):
     def server(self):
         global status
         self.serverSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        buffSize = self.serverSock
-        self.serverSock.bind(('', LOCAL_PORT))
+        self.serverSock.bind(('', self.LOCAL_PORT))
         while True:
-            data, address = self.serverSock.recvfrom(MAX_BYTES)
+            data, address = self.serverSock.recvfrom(self.MAX_BYTES)
             packet = PacketIn(data)
-            if DEBUG:
+            if self.DEBUG:
                 self.packetDebug(packet)
             if packet.getProtoCode() != 'odyaris1':
                 continue
@@ -424,61 +422,6 @@ class AppWin(MainWindow):
                         self.insert_text('Peer ==> ' + message)
 
 
-# Thread for sending the data packets. It sends the packet, get's into sleep for some time, checks
-# if acknowledge has been received. If yes it exits, else it doubles the time to sleep and resends
-# the packet. Does this until timeToSleep has reached 1 second.
-class client(threading.Thread):
-    def __init__(self, message):
-        threading.Thread.__init__(self)
-        self.message = message
-        self.packet = PacketOut(self.message)   # Create new packet instance with the message
-        app.dataSequence += 1
-        # Take a copy of dataSequence because it may be changed the same time by other running
-        # threads
-        self.tmpDataSequence = app.dataSequence
-        self.packet.setSequenceNumber(self.tmpDataSequence) # Set sequence number
-        app.dataSeqForAckList.append(self.tmpDataSequence)  # Put it in the list for acknowledge
-        # Create variables for counting the time
-        self.timeToSleep = 0.01
-        self.newTime = 0
-        self.timestamp = self.oldTime = time.time()
-        self.packet.setTimeStamp(app.toNTPTime(self.timestamp)) # Set timestamp to the packet
-
-    def run(self):
-        global status
-        while True:
-            try:
-                app.serverSock.sendto(self.packet.getTotalPacket(), (app.currentIP, REMOTE_PORT))
-                if DEBUG:
-                    app.packetDebug(self.packet)
-                time.sleep(self.timeToSleep)
-                self.timeToSleep *= 2
-                if self.tmpDataSequence not in app.dataSeqForAckList:
-                    # The server socket has found that an acknowledge is received and removed the
-                    # sequence number from the list. So we exit.
-                    break
-                if self.newTime > ACK_WAIT_TIME:
-                    # The "time out" has been reached so the packet won't be sent again
-                    app.insert_text('Server ==> Unpredicted disconnection..')
-                    status = 1
-                    app.statusRefresh()
-                    break
-            except socket.error as err:
-                if err.errno == errno.ENETUNREACH:
-                    debugThread = setDebug('Network Unreachable')
-                    debugThread.start()
-                    status = 0
-                    app.statusRefresh()
-            except socket.gaierror:
-                debugThread = setDebug('Problem with DNS resolution')
-                debugThread.start()
-            except UnicodeError:
-                debugThread = setDebug('Please provide a valid IP or hostname')
-                debugThread.start()
-            # Renewing the time to sleep
-            timeLap = time.time() - self.oldTime
-            self.oldTime = time.time()
-            self.newTime += timeLap
 
 
 
