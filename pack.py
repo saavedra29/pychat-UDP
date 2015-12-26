@@ -9,8 +9,9 @@ Methods contained on BOTH Input and Output packets (getters):
 	getMessage() 			====>	Returns message as <string>
 	isControl()				====>	Returns True if it is a Control packet - False if it is Data packet
 	isAcknowledge()			====>	Returns True if it is an Acknowledge packet - False for Normal packet
-	isControlAcknowledge	====> 	Returns True if it is Acknowledge for Control packet else False if
+	isControlAcknowledge()	====> 	Returns True if it is Acknowledge for Control packet else False if
 									it is for Data packet
+	isEncrypted()           ====>   Returns True if the packet is encrypted or else False
 	getState()				====>	Returns a state: 'ping', 'pong', 'connect', 'acceptConnect',
 	'disconnect', 'refuseConnect', 'error' as <string> else just empty <string>
 	getSequenceNumber()		====>	Returns the sequence number of the packet as 4 byte <integer>
@@ -32,6 +33,7 @@ Methods contained ONLY in Output packets (setters):
 	setAckSequenceNumber(int) ==>	If Ack packet, takes an <int> to set the sequence number of the packet to acknowledge
 	setTimeStamp(int)		====>	Takes <float> to set the packet's timestamp
 	setTotalSize()			====> 	Set's the packet's total size. YOU'LL NEVER NEED TO CALL THIS.
+	encrypt(crypto)         ====>   Takes a cryptography (Fernet) object and returns the encrypted token
 
 Method contained ONLY in Input packets:
 	getTotalSize()			====>	Return the total size of the packet in bytes 1 - 65556 as <unsigned short>
@@ -41,6 +43,7 @@ Method contained ONLY in Input packets:
 
 import struct
 import protocol as pro
+from cryptography import fernet
 
 HEADER_SIZE = 32
 PROTOCODE = b'odyaris1'
@@ -75,6 +78,12 @@ class PacketIn:
 
     def isControlAcknowledge(self):
         if self.header[pro.P1_Type] & (1 << pro.b1_AckCtrlData):
+            return True
+        else:
+            return False
+
+    def isEncrypted(self):
+        if self.header[pro.P1_Type] & (1 << pro.b1_Encryption):
             return True
         else:
             return False
@@ -122,6 +131,9 @@ class PacketIn:
     def getProtoCode(self):
         code = self.header[pro.P8_Code].decode('utf8')
         return code
+
+    def decrypt(self, cryptoObject):
+        self.message = cryptoObject.decrypt(self.message)
 
 
 ##### OUTPUT PACKET
@@ -191,6 +203,10 @@ class PacketOut:
     def setTotalSize(self):
         self.totalPacket[pro.P2_TotalSize] = struct.pack('H', len(self.totalPacket))
 
+    def setEncryption(self):
+        self.header[pro.P1_Type] |= 1 << pro.b1_Encryption
+
+
     # Getters
     def getHeader(self):
         return self.header
@@ -213,6 +229,12 @@ class PacketOut:
 
     def isControlAcknowledge(self):
         if self.header[pro.P1_Type] & (1 << pro.b1_AckCtrlData):
+            return True
+        else:
+            return False
+
+    def isEncrypted(self):
+        if self.header[pro.P1_Type] & (1 << pro.b1_Encryption):
             return True
         else:
             return False
@@ -246,3 +268,7 @@ class PacketOut:
     def getTimeStamp(self):
         timeStamp = struct.unpack('d', self.header[pro.P8_TimeStamp])
         return timeStamp[0]
+
+    def encrypt(self, cryptoObject):
+        self.message = cryptoObject.encrypt(self.message)
+

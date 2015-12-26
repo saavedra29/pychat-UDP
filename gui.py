@@ -33,6 +33,7 @@ class MainWindow(tk.Tk):
         self.geometry("580x400")
         self.title("JUST GUI")
         self.protocol('WM_DELETE_WINDOW', self.on_exit)
+        self.keyFromWindowInput = ''
 
         # Create a menubar and associate it with the window
         self.menubar = tk.Menu()
@@ -55,6 +56,8 @@ class MainWindow(tk.Tk):
         self.gen_key_menu.add_command(label="Encryption on", command=self.on_encryption_on)
         self.gen_key_menu.add_command(label="Encryption off", command=self.on_encryption_off)
         self.gen_key_menu.add_command(label="Generate key", command=self.on_generate_key)
+        self.gen_key_menu.add_command(label="Place remote key", command=self.on_place_key)
+
 
 
 
@@ -173,14 +176,52 @@ class MainWindow(tk.Tk):
     def on_generate_key(self):
         pass
 
-    def throw_error_win(self, errorMessage):
-        # Pop up window for errors
-        self.error_window = tk.Toplevel()
-        self.error_window.minsize(300, 200)
-        self.error_window.grab_set()
-        self.error_window.title('Error message')
-        self.error_message = tk.Message(self.error_window, text = errorMessage, justify = tk.LEFT, padx = 10, pady = 20)
-        self.error_message.pack(expand=True)
-        self.error_button = tk.Button(self.error_window, text='OK', command=self.error_window.destroy)
-        self.error_button.pack()
+    def on_place_key(self):
+        pass
+
+    def on_create_key_window(self, key):
+        create_key_window = tk.Toplevel()
+        create_key_window.minsize(360, 200)
+        create_key_window.grab_set()
+        create_key_window.title('Key Generation')
+        instructions_message = tk.Message(create_key_window,
+                                               text='This is the automatically generated key. '
+                                                    'The remote peer should have exactly the '
+                                                    'same for the encryption-decryption to be '
+                                                    'possible.\nUse Ctrl-C to copy.')
+        instructions_message.bind("<Configure>", lambda e:
+        instructions_message.configure(width=e.width - 10))
+        instructions_message.pack(fill=tk.X, expand=True)
+        messageEntry = tk.Entry(create_key_window, state='readonly')
+        var = tk.StringVar()
+        print(key)
+        print(key.decode('utf8'))
+        var.set(key.decode('utf8'))
+        messageEntry.config(textvariable=var)
+        messageEntry.pack(expand=True, fill=tk.X)
+        generate_key_button = tk.Button(create_key_window, text='OK',
+                                      command=create_key_window.destroy)
+        generate_key_button.pack()
+
+    def assign(self):
+        pass
+
+    def on_place_key_window(self):
+        self.place_key_window = tk.Toplevel()
+        self.place_key_window.minsize(360, 200)
+        self.place_key_window.grab_set()
+        self.place_key_window.title('Key Generation')
+        self.instructions_message = tk.Message(self.place_key_window,
+                                         text='Please place the remote peer key.')
+        self.instructions_message.bind('<Configure>', lambda e:
+        self.instructions_message.configure(width=e.width - 10))
+        self.instructions_message.pack(fill=tk.X, expand=True)
+        self.keyEntry = tk.Entry(self.place_key_window)
+        self.keyEntry.pack()
+        self.submit_key_button = tk.Button(self.place_key_window, text='Submit',
+                                      command = self.assign)
+        self.submit_key_button.pack()
+
+
+
 

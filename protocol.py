@@ -19,6 +19,7 @@ P2_TotalSize 		= slice(28, 30)	# Total packet size
 b1_Ctrl 			= 0				# If set: Control - else: Data
 b1_Ack 				= 1				# If set: Acknowlede - else: Normal
 b1_AckCtrlData 		= 2				# If set: Control acknowledge - else: Data Acknowledge
+b1_Encryption       = 3             # If set: Data encrypted
 
 # P1_State
 B1_Ping             = 0x01
