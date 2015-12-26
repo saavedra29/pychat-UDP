@@ -28,8 +28,6 @@ class Client(threading.Thread):
         self.packet.setTimeStamp(self.application.toNTPTime(self.timestamp)) # Set timestamp to the packet
 
     def run(self):
-        # print('key: ' + app.key.decode('utf8'))
-        print('Type: ' + str(type(self.application.key)))
         while True:
             try:
                 self.application.serverSock.sendto(self.packet.getTotalPacket(), (self.application.currentIP,
@@ -46,14 +44,14 @@ class Client(threading.Thread):
                     # The "time out" has been reached so the packet won't be sent again
                     self.application.insert_text('Server ==> Unpredicted disconnection..')
                     self.application.status = 1
-                    # self.application.statusRefresh()
+                    self.application.statusRefresh()
                     break
             except socket.error as err:
                 if err.errno == socket.errno.ENETUNREACH:
                     debugThread = self.application.setDebug('Network Unreachable')
                     debugThread.start()
                     self.application.status = 0
-                    # self.application.statusRefresh()
+                    self.application.statusRefresh()
             except socket.gaierror:
                 debugThread = self.application.setDebug('Problem with DNS resolution')
                 debugThread.start()

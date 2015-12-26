@@ -109,6 +109,8 @@ class PacketIn:
     def getError(self):
         if self.header[pro.P1_ErrorType] == pro.B1_ParallelConnect:
             return 'parallelConnect'
+        elif self.header[pro.P1_ErrorType] == pro.B1_WrongEncryptionKey:
+            return 'wrongEncryptionKey'
         else:
             return ''
 
@@ -185,6 +187,8 @@ class PacketOut:
     def setError(self, error):
         if error == 'parallelConnect':
             self.header[pro.P1_ErrorType] = pro.B1_ParallelConnect
+        elif error == 'wrongEncryptionKey':
+            self.header[pro.P1_ErrorType] = pro.B1_WrongEncryptionKey
         else:
             raise Exception('Wrong error inserted')
 

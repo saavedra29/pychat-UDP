@@ -34,6 +34,7 @@ class MainWindow(tk.Tk):
         self.title("JUST GUI")
         self.protocol('WM_DELETE_WINDOW', self.on_exit)
         self.keyFromWindowInput = ''
+        # Images for the encryption indicator at the right of the input widget
         self.imageOrangePath = 'images/orange15.png'
         self.imageGreenPath = 'images/green15.png'
         self.orangeImg = tk.PhotoImage(file=self.imageOrangePath)

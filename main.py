@@ -43,12 +43,14 @@ class AppWin(MainWindow):
         # Two substates according to who sent first connection requesting packet
         self.requestingConnection = False
         self.receivingConnection = False
+
         self.peerIsAlive = False
         self.localEncryptionState = False
         self.remoteEncryptionState = False
         self.key = fernet.Fernet.generate_key()
         self.crypto = fernet.Fernet(self.key)
 
+    # Methods called from the encryption menu
     def on_encryption_on(self):
         self.localEncryptionState = True
         self.encryption_indicator.configure(image=self.greenImg)
@@ -231,7 +233,6 @@ class AppWin(MainWindow):
     # Sends all kinds of Control (non data) packets. Type is required for any kind of packets.
     # error is required for "error" type packets and "packeForAck" is required for acknowledges
     def sendPacket(self, type, error=None, packetForAck=None):
-        print('key: ' + self.key.decode('utf8'))
         # Packet types:
         # 'connect', 'acceptConnect', 'disconnect', 'error', 'pong', 'acknowledge'
         packet = PacketOut()  # Create new packet instance
@@ -291,7 +292,6 @@ class AppWin(MainWindow):
     # Checks is remote peer is alive berore doing specific actions.
     # Changes peerIsAlive bollean accordingly
     def peerAlive(self):
-        print('key: ' + self.key.decode('utf8'))
         pingPacket = PacketOut()
         pingPacket.setControl()
         pingPacket.setState('ping')
@@ -341,11 +341,11 @@ class AppWin(MainWindow):
                     self.sendPacket('disconnect')
 
             elif self.status == 1:
-                # If it's "error" packet and the error is "parallelConnect" means that the
-                # remote peer sent a "connect" packet and insted of "acceptConnect" or "disconnect"
-                # received again "connect" packet. This preventes from forever waiting loop.
                 if packet.isControl() and not packet.isAcknowledge() and \
                         (packet.getState() == 'error'):
+                    # If it's "error" packet and the error is "parallelConnect" means that the
+                    # remote peer sent a "connect" packet and insted of "acceptConnect" or "disconnect"
+                    # received again "connect" packet. This preventes from forever waiting loop.
                     if packet.getError() == 'parallelConnect':
                         self.sendPacket('disconnect')
                         self.requestingConnection = False
@@ -413,9 +413,18 @@ class AppWin(MainWindow):
             else:
                 # Status is 2 (connected)
                 if packet.isControl():
+                    # Check for error packets
+                    if packet.getState() == 'error':
+                        # If it's "error" packet and the error is "wrongEncryptionKey" we just print
+                        # the appropriate message at the debug window.
+                        if packet.getError() == 'wrongEncryptionKey':
+                            invalidKeyDebug = setDebug('Invalid Encryption Key. Please set the'
+                                                       ' correct key.')
+                            invalidKeyDebug.start()
+
                     # If it's acknowledge get the sequence number of the packet it acknowledges
                     # and remove it from the list
-                    if packet.isAcknowledge():
+                    elif packet.isAcknowledge():
                         ack = packet.getAckSequenceNumber()
                         if len(self.dataSeqForAckList) is not 0:
                             if ack in self.dataSeqForAckList:
@@ -449,6 +458,7 @@ class AppWin(MainWindow):
                             try:
                                 packet.decrypt(self.crypto)
                             except fernet.InvalidToken:
+                                self.sendPacket('error', error='wrongEncryptionKey')
                                 invalidKeyDebug = setDebug('Invalid Encryption Key. Please set the'
                                                            ' correct key.')
                                 invalidKeyDebug.start()

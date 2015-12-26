@@ -32,6 +32,7 @@ B1_Error            = 0x07
 
 # P1_ErrorType
 B1_ParallelConnect  = 0x01
+B1_WrongEncryptionKey = 0x02
 
 
 
