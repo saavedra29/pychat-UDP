@@ -51,9 +51,11 @@ class AppWin(MainWindow):
 
     def on_encryption_on(self):
         self.localEncryptionState = True
+        self.encryption_indicator.configure(image=self.greenImg)
 
     def on_encryption_off(self):
         self.localEncryptionState = False
+        self.encryption_indicator.configure(image=self.orangeImg)
 
     def on_generate_key(self):
         self.key = fernet.Fernet.generate_key()

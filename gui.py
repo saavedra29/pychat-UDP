@@ -34,6 +34,10 @@ class MainWindow(tk.Tk):
         self.title("JUST GUI")
         self.protocol('WM_DELETE_WINDOW', self.on_exit)
         self.keyFromWindowInput = ''
+        self.imageOrangePath = 'images/orange15.png'
+        self.imageGreenPath = 'images/green15.png'
+        self.orangeImg = tk.PhotoImage(file=self.imageOrangePath)
+        self.greenImg = tk.PhotoImage(file=self.imageGreenPath)
 
         # Create a menubar and associate it with the window
         self.menubar = tk.Menu()
@@ -116,6 +120,9 @@ class MainWindow(tk.Tk):
                                  self.on_enter_press)  # <Return> key binding for sending the data
         self.userInputEntry.pack(side="left", fill="x", expand=True)
 
+        self.encryption_indicator = tk.Label(self.input_frame, image=self.orangeImg)
+        self.encryption_indicator.pack(side='right')
+
         # Create Debug frame
         self.debug_frame = tk.Frame(self)
         self.debug_frame.pack(side="top", fill="x")
@@ -126,6 +133,7 @@ class MainWindow(tk.Tk):
 
         self.debug_label = tk.Label(self.debug_frame)
         self.debug_label.pack(side="left")
+
 
     # Functions of the menu buttons
     def insert_text(self, txt):
