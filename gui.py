@@ -157,7 +157,7 @@ class MainWindow(tk.Tk):
             command = 'kill ' + str(id)
             system(command)
         else:
-            command = 'taskkill /pid ' + str(id)
+            command = 'taskkill -f /pid ' + str(id)
             system(command)
 
     # Set peer function
